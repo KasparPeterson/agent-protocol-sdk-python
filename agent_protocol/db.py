@@ -20,9 +20,9 @@ class NotFoundException(Exception):
     def __init__(self, item_name: str, item_id: str):
         self.item_name = item_name
         self.item_id = item_id
-        super().__init__(NotFoundResponse(
-            message=f"{item_name} with {item_id} not found."
-        ))
+        super().__init__(
+            NotFoundResponse(message=f"{item_name} with {item_id} not found.")
+        )
 
 
 class TaskDB(ABC):
@@ -158,7 +158,7 @@ class InMemoryTaskDB(TaskDB):
             artifact_id=artifact_id,
             agent_created=agent_created,
             file_name=file_name,
-            relative_path=relative_path
+            relative_path=relative_path,
         )
         task = await self.get_task(task_id)
         task.artifacts.append(artifact)
