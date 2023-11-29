@@ -6,13 +6,16 @@ import aiofiles
 from fastapi import APIRouter, UploadFile, Form, File
 from fastapi import Depends
 from fastapi.responses import FileResponse
+from fastapi.security import APIKeyHeader
 from fastapi.security import HTTPAuthorizationCredentials
+from fastapi.security import HTTPBearer
 from hypercorn.asyncio import serve
 from hypercorn.config import Config
 from typing import Callable, List, Optional, Annotated, Coroutine, Any
 
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
+from starlette.status import HTTP_401_UNAUTHORIZED
 from starlette.status import HTTP_403_FORBIDDEN
 
 from .db import InMemoryTaskDB, Task, TaskDB, Step
@@ -50,9 +53,19 @@ def verify_token(req: Request):
 
 DEPENDENCIES = [Depends(verify_token)]
 
+security = HTTPBearer()
 
-@base_router.post("/ap/v1/agent/tasks", response_model=Task, tags=["agent"])
-async def create_agent_task(body: TaskRequestBody | None = None) -> Task:
+
+@base_router.post(
+    "/ap/v1/agent/tasks",
+    response_model=Task,
+    tags=["agent"],
+
+)
+async def create_agent_task(
+    body: TaskRequestBody | None = None,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> Task:
     """
     Creates a task for the agent.
     """
@@ -68,22 +81,26 @@ async def create_agent_task(body: TaskRequestBody | None = None) -> Task:
     return task
 
 
-from fastapi.security import HTTPBearer, HTTPBasicCredentials
+from fastapi import Security
 
-http_bearer = HTTPBearer()
+API_KEY_NAME = "Authorization"
+API_KEY_HEADER = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
 
-async def is_credentials_valid(request: Request) -> bool:
+async def is_credentials_valid(api_key_header: str = Security(API_KEY_HEADER)) -> bool:
     print("==== is_credentials_valid ===")
     if _authorization.authorization_type == "bearer_token":
         print("  authorization is set to bearer_token")
-        credentials: Optional[HTTPAuthorizationCredentials] = await http_bearer(request)
-        print("  got credentials:", credentials)
-        if credentials and credentials.credentials:
-            print("  .credentials:", credentials.credentials)
-            print("  access_token:", _authorization.access_token)
-            if credentials.credentials == _authorization.access_token:
-                return True
+        if not api_key_header:
+            raise HTTPException(
+                status_code=HTTP_401_UNAUTHORIZED,
+                detail="No authentication header provided"
+            )
+
+        print("  api_key_header:", api_key_header)
+        print("  access_token:", _authorization.access_token)
+        if api_key_header == "Bearer " + _authorization.access_token:
+            return True
         raise HTTPException(
             status_code=HTTP_403_FORBIDDEN, detail="Not authenticated"
         )
@@ -98,7 +115,7 @@ async def is_credentials_valid(request: Request) -> bool:
 async def list_agent_tasks_ids(
     page_size: int = 10,
     current_page: int = 1,
-    credentials: HTTPBasicCredentials = Depends(is_credentials_valid),
+    credentials: bool = Depends(is_credentials_valid),
 ) -> List[str]:
     """
     List all tasks that have been created for the agent.

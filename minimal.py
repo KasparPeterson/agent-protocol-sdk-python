@@ -20,14 +20,15 @@ agent_info = AgentInfo(
     description="My Agent is a Cool Agent",
     version="1.0.1",
     protocol_version="23",
-    config_options={
-        "debug": {
-            "type": "boolean",
-            "default": False,
-            "description": "Whether to run the agent in debug mode."
-        },
-    }
 )
+
+"""config_options={
+    "debug": {
+        "type": "boolean",
+        "default": False,
+        "description": "Whether to run the agent in debug mode."
+    },
+}"""
 
 authorization = Authorization(
     authorization_type="bearer_token",

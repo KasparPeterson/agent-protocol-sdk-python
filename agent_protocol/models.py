@@ -266,7 +266,7 @@ class AgentInfo(BaseModel):
         description="What authorization is request by the Agent.",
         example="bearer_token",
     )
-    config_options: Optional[Dict] = Field(
+    """config_options: Optional[Dict] = Field(
         {},
         description="List of configuration options for the agent's tasks and steps. The config is a user-defined set of key/value pairs where the values are standard but the keys are not.",
         json_schema_extra={
@@ -281,7 +281,7 @@ class AgentInfo(BaseModel):
                 "description": "The model in which the agent's tasks should run."
             }
         }
-    )
+    )"""
 
 
 class Authorization(BaseModel):
