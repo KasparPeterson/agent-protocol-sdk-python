@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import Dict
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
@@ -217,3 +218,80 @@ class TaskStepsListResponse(BaseModel):
 class TaskArtifactsListResponse(BaseModel):
     artifacts: List[Artifact]
     pagination: Pagination
+
+
+class AgentInfo(BaseModel):
+    name: Optional[str] = Field(
+        None,
+        description="Name of the Agent.",
+        example="My Agent",
+    )
+    description: Optional[str] = Field(
+        None,
+        description="Description of the Agent.",
+        example="My agent is the best agent.",
+    )
+    version: str = Field(
+        ...,
+        description="Version of the agent.",
+        example="1.0.0",
+    )
+    protocol_version: str = Field(
+        ...,
+        description="Version of the agent protocol.",
+        example="1",
+    )
+    git: Optional[str] = Field(
+        None,
+        description="Git repository of the agent.",
+        example="https://github.com/AI-Engineers-Foundation/agent-protocol",
+    )
+    url: Optional[str] = Field(
+        None,
+        description="URL of the agent.",
+        example="https://my-agent.com",
+    )
+    docs: Optional[str] = Field(
+        None,
+        description="Link to the documentation of the agent.",
+        example="https://my-agent.com/docs"
+    )
+    issues: Optional[str] = Field(
+        None,
+        description="Link to the issues of the agent.",
+        example="https://github.com/AI-Engineers-Foundation/agent-protocol/issues",
+    )
+    authorization: Optional[str] = Field(
+        None,
+        description="What authorization is request by the Agent.",
+        example="bearer_token",
+    )
+    """config_options: Optional[Dict] = Field(
+        {},
+        description="List of configuration options for the agent's tasks and steps. The config is a user-defined set of key/value pairs where the values are standard but the keys are not.",
+        json_schema_extra={
+            "debug": {
+                "type": "boolean",
+                "default": False,
+                "description": "Whether to run the agent in debug mode."
+            },
+            "model": {
+                "type": "string",
+                "default": "gpt-4",
+                "description": "The model in which the agent's tasks should run."
+            }
+        }
+    )"""
+
+
+class Authorization(BaseModel):
+    authorization_type: Optional[str] = Field(
+        None,
+        description="What authorization method needs to be used by the client.",
+        example="bearer_token"
+    )
+    access_token: Optional[str] = Field(
+        None,
+        description="Access token",
+        example="mySecretToken"
+    )

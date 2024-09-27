@@ -4,12 +4,23 @@ from uuid import uuid4
 
 import aiofiles
 from fastapi import APIRouter, UploadFile, Form, File
+from fastapi import Depends
 from fastapi.responses import FileResponse
+from fastapi.security import APIKeyHeader
+from fastapi.security import HTTPAuthorizationCredentials
+from fastapi.security import HTTPBearer
 from hypercorn.asyncio import serve
 from hypercorn.config import Config
 from typing import Callable, List, Optional, Annotated, Coroutine, Any
 
+from starlette.exceptions import HTTPException
+from starlette.requests import Request
+from starlette.status import HTTP_401_UNAUTHORIZED
+from starlette.status import HTTP_403_FORBIDDEN
+
 from .db import InMemoryTaskDB, Task, TaskDB, Step
+from .models import AgentInfo
+from .models import Authorization
 from .server import app
 from .models import (
     TaskRequestBody,
@@ -21,20 +32,40 @@ from .models import (
     Pagination,
 )
 
-
 StepHandler = Callable[[Step], Coroutine[Any, Any, Step]]
 TaskHandler = Callable[[Task], Coroutine[Any, Any, None]]
 
-
 _task_handler: Optional[TaskHandler]
 _step_handler: Optional[StepHandler]
-
+_agent_info: Optional[AgentInfo]
+_authorization: Optional[Authorization]
 
 base_router = APIRouter()
 
 
-@base_router.post("/ap/v1/agent/tasks", response_model=Task, tags=["agent"])
-async def create_agent_task(body: TaskRequestBody | None = None) -> Task:
+def verify_token(req: Request):
+    token = req.headers["Authorization"]
+    # Here your code for verifying the token or whatever you use
+    if _authorization.authorization_type == "bearer_token":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return True
+
+
+DEPENDENCIES = [Depends(verify_token)]
+
+security = HTTPBearer()
+
+
+@base_router.post(
+    "/ap/v1/agent/tasks",
+    response_model=Task,
+    tags=["agent"],
+
+)
+async def create_agent_task(
+    body: TaskRequestBody | None = None,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> Task:
     """
     Creates a task for the agent.
     """
@@ -50,11 +81,47 @@ async def create_agent_task(body: TaskRequestBody | None = None) -> Task:
     return task
 
 
-@base_router.get("/ap/v1/agent/tasks", response_model=TaskListResponse, tags=["agent"])
-async def list_agent_tasks_ids(page_size: int = 10, current_page: int = 1) -> List[str]:
+from fastapi import Security
+
+API_KEY_NAME = "Authorization"
+API_KEY_HEADER = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+
+async def is_credentials_valid(api_key_header: str = Security(API_KEY_HEADER)) -> bool:
+    print("==== is_credentials_valid ===")
+    if _authorization.authorization_type == "bearer_token":
+        print("  authorization is set to bearer_token")
+        if not api_key_header:
+            raise HTTPException(
+                status_code=HTTP_401_UNAUTHORIZED,
+                detail="No authentication header provided"
+            )
+
+        print("  api_key_header:", api_key_header)
+        print("  access_token:", _authorization.access_token)
+        if api_key_header == "Bearer " + _authorization.access_token:
+            return True
+        raise HTTPException(
+            status_code=HTTP_403_FORBIDDEN, detail="Not authenticated"
+        )
+    return True
+
+
+@base_router.get(
+    "/ap/v1/agent/tasks",
+    response_model=TaskListResponse,
+    tags=["agent"],
+)
+async def list_agent_tasks_ids(
+    page_size: int = 10,
+    current_page: int = 1,
+    credentials: bool = Depends(is_credentials_valid),
+) -> List[str]:
     """
     List all tasks that have been created for the agent.
     """
+    print("==== list_agent_tasks_ids ====")
+    print("  credentials:", credentials)
     tasks = await Agent.db.list_tasks()
     start_index = (current_page - 1) * page_size
     end_index = start_index + page_size
@@ -207,12 +274,25 @@ async def download_agent_task_artifacts(task_id: str, artifact_id: str) -> FileR
     )
 
 
+@base_router.get(
+    "/ap/v1/agent/info",
+    tags=["agent"],
+)
+async def info() -> AgentInfo:
+    return _agent_info
+
+
 class Agent:
     db: TaskDB = InMemoryTaskDB()
     workspace: str = os.getenv("AGENT_WORKSPACE", "workspace")
 
     @staticmethod
-    def setup_agent(task_handler: TaskHandler, step_handler: StepHandler):
+    def setup_agent(
+        task_handler: TaskHandler,
+        step_handler: StepHandler,
+        agent_info: Optional[AgentInfo] = None,
+        authorization: Optional[Authorization] = None,
+    ):
         """
         Set the agent's task and step handlers.
         """
@@ -221,6 +301,18 @@ class Agent:
 
         global _step_handler
         _step_handler = step_handler
+
+        global _agent_info
+        if agent_info:
+            _agent_info = agent_info
+        else:
+            _agent_info = AgentInfo(version="1.0.0", protocol_version="1")
+
+        global _authorization
+        if authorization:
+            _authorization = authorization
+        else:
+            _authorization = Authorization()
 
         return Agent
 

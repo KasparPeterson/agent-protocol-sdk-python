@@ -2,6 +2,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from agent_protocol.db import NotFoundException
 
+
 async def not_found_exception_handler(
     request: Request, exc: NotFoundException
 ) -> JSONResponse:
